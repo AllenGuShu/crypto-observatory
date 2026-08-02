@@ -1,80 +1,72 @@
 /**
- * 每次資料更新主程式（加密貨幣版）
- * 1. 抓取 Binance 所有 USDT 交易對，並用 24hr 成交量過濾掉流動性太差的幣
- * 2. 逐一幣種抓取K線資料
+ * 每次資料更新主程式（加密貨幣版 / Kraken）
+ * 1. 抓取 Kraken 所有 USD 交易對
+ * 2. 逐一交易對抓取日K線資料
  * 3. 計算 SMA5/10/20/60、KD、MACD
- * 4. 篩選「多頭排列」(SMA5 > SMA10 > SMA20 > SMA60) 的幣種
+ * 4. 用最近一日成交額過濾流動性太差的幣，並篩選「多頭排列」的幣種
  * 5. 輸出 JSON 給 Next.js 前端讀取
  *
  * 執行方式: node scripts/updateData.js
- * （Binance 公開行情 API 不需要任何 API Key）
+ * （Kraken 公開行情 API 不需要任何 API Key，且不會封鎖美國/GitHub Actions 的IP）
  */
 
 const fs = require("fs");
 const path = require("path");
-const { fetchExchangeInfo, fetchTicker24hr, fetchKlines, sleep } = require("./binance");
+const { fetchAssetPairs, fetchOHLC, sleep } = require("./kraken");
 const { calcSMA, calcKD, calcMACD } = require("./indicators");
 
 const DATA_DIR = path.join(__dirname, "..", "data");
 const COINS_DIR = path.join(DATA_DIR, "coins");
 
-const INTERVAL = process.env.INTERVAL || "1d"; // K線週期：1d(日線) / 4h / 1h ...
-const KLINE_LIMIT = 200; // 抓幾根K棒，需 >= 60 才能算SMA60，抓200讓KD/MACD有足夠暖機空間
-const MIN_QUOTE_VOLUME_USDT = process.env.MIN_QUOTE_VOLUME_USDT
-  ? Number(process.env.MIN_QUOTE_VOLUME_USDT)
-  : 500000; // 過濾掉24小時成交額低於這個門檻的幣，避免抓一堆沒人在交易的殭屍幣
-const REQUEST_DELAY_MS = 200; // Binance 限制寬鬆，禮貌性間隔即可
+const INTERVAL_MINUTES = process.env.INTERVAL_MINUTES ? Number(process.env.INTERVAL_MINUTES) : 1440; // 1440=日線
+const MIN_QUOTE_VOLUME_USD = process.env.MIN_QUOTE_VOLUME_USD ? Number(process.env.MIN_QUOTE_VOLUME_USD) : 200000;
+const REQUEST_DELAY_MS = 350; // Kraken 對公開端點沒有明訂嚴格限制，禮貌性間隔即可
 // 測試用：設定 MAX_COINS=20 只抓前20個幣，很快跑完，方便本地測試流程是否正常
 const MAX_COINS = process.env.MAX_COINS ? parseInt(process.env.MAX_COINS, 10) : Infinity;
 
 async function main() {
-  console.log("== 開始更新加密貨幣資料 ==");
+  console.log("== 開始更新加密貨幣資料 (Kraken) ==");
   fs.mkdirSync(COINS_DIR, { recursive: true });
 
-  console.log("[1/4] 抓取交易對清單與24小時成交量...");
-  const exchangeInfo = await fetchExchangeInfo();
-  const tickers = await fetchTicker24hr();
-  const tickerMap = new Map(tickers.map((t) => [t.symbol, t]));
-
-  const symbols = exchangeInfo.symbols.filter((s) => {
-    if (s.status !== "TRADING") return false;
-    if (s.quoteAsset !== "USDT") return false;
-    if (!s.isSpotTradingAllowed) return false;
-    const ticker = tickerMap.get(s.symbol);
-    if (!ticker) return false;
-    if (parseFloat(ticker.quoteVolume) < MIN_QUOTE_VOLUME_USDT) return false;
+  console.log("[1/4] 抓取交易對清單...");
+  const assetPairs = await fetchAssetPairs();
+  const pairEntries = Object.entries(assetPairs).filter(([, info]) => {
+    if (info.quote !== "USD") return false;
+    if (info.status && info.status !== "online") return false;
+    if (!info.altname) return false;
     return true;
   });
-  console.log(`  -> 篩選後共 ${symbols.length} 個USDT交易對 (24h成交額 >= ${MIN_QUOTE_VOLUME_USDT.toLocaleString()} USDT)`);
+  console.log(`  -> 篩選後共 ${pairEntries.length} 個 USD 交易對`);
 
-  console.log(`[2/4] 逐幣抓取K線資料 (${INTERVAL})...`);
-  const targetSymbols = symbols.slice(0, MAX_COINS);
-  const seriesMap = new Map();
+  console.log(`[2/4] 逐幣抓取K線資料 (interval=${INTERVAL_MINUTES}分鐘)...`);
+  const targets = pairEntries.slice(0, MAX_COINS);
+  const seriesMap = new Map(); // symbol -> { rows, baseAsset }
   let processed = 0;
   let failedCount = 0;
 
-  for (const s of targetSymbols) {
+  for (const [, info] of targets) {
     processed++;
+    const symbol = `${info.base}${info.quote}`; // 例如 BTCUSD，給前端用的乾淨代號
     let rows;
     try {
-      rows = await fetchKlines(s.symbol, INTERVAL, KLINE_LIMIT);
+      rows = await fetchOHLC(info.altname, INTERVAL_MINUTES);
     } catch (err) {
       failedCount++;
-      console.warn(`  ! ${s.symbol} 抓取失敗，跳過: ${err.message}`);
+      console.warn(`  ! ${symbol} (${info.altname}) 抓取失敗，跳過: ${err.message}`);
       await sleep(REQUEST_DELAY_MS);
       continue;
     }
     await sleep(REQUEST_DELAY_MS);
 
-    if (rows && rows.length > 0) seriesMap.set(s.symbol, { rows, baseAsset: s.baseAsset });
+    if (rows && rows.length > 0) seriesMap.set(symbol, { rows, baseAsset: info.base });
 
-    if (processed % 50 === 0 || processed === targetSymbols.length) {
-      console.log(`  -> 已處理 ${processed}/${targetSymbols.length} 個交易對 (失敗 ${failedCount})`);
+    if (processed % 30 === 0 || processed === targets.length) {
+      console.log(`  -> 已處理 ${processed}/${targets.length} 個交易對 (失敗 ${failedCount})`);
     }
   }
   console.log(`  -> 共取得 ${seriesMap.size} 個交易對的K線資料`);
 
-  console.log("[3/4] 計算指標並篩選多頭排列幣種...");
+  console.log("[3/4] 計算指標、過濾流動性並篩選多頭排列幣種...");
   const screened = [];
   const coinsIndex = [];
 
@@ -88,6 +80,10 @@ async function main() {
     const closes = rows.map((r) => r.close);
     const volumes = rows.map((r) => r.volume);
 
+    const lastIdx = closes.length - 1;
+    const quoteVolumeApprox = volumes[lastIdx] * closes[lastIdx];
+    if (quoteVolumeApprox < MIN_QUOTE_VOLUME_USD) continue; // 流動性太差，跳過
+
     const sma5 = calcSMA(closes, 5);
     const sma10 = calcSMA(closes, 10);
     const sma20 = calcSMA(closes, 20);
@@ -95,14 +91,11 @@ async function main() {
     const kd = calcKD(highs, lows, closes, 9);
     const macd = calcMACD(closes, 12, 26, 9);
 
-    const lastIdx = closes.length - 1;
-    const ticker = tickerMap.get(symbol);
-
     const record = {
       symbol,
       baseAsset,
-      quoteAsset: "USDT",
-      interval: INTERVAL,
+      quoteAsset: "USD",
+      interval: INTERVAL_MINUTES,
       dates,
       open: opens,
       high: highs,
@@ -138,7 +131,7 @@ async function main() {
       close: closes[lastIdx],
       change,
       changePercent: +changePercent.toFixed(2),
-      quoteVolume24h: ticker ? parseFloat(ticker.quoteVolume) : null,
+      quoteVolume24h: quoteVolumeApprox,
       volume: volumes[lastIdx],
       sma5: sma5[lastIdx],
       sma10: sma10[lastIdx],
@@ -166,7 +159,7 @@ async function main() {
     JSON.stringify({
       updatedAt,
       condition: "多頭排列 (SMA5 > SMA10 > SMA20 > SMA60)",
-      interval: INTERVAL,
+      interval: INTERVAL_MINUTES,
       count: screened.length,
       list: screened,
     })
@@ -181,10 +174,11 @@ async function main() {
     path.join(DATA_DIR, "meta.json"),
     JSON.stringify({
       updatedAt,
-      interval: INTERVAL,
+      interval: INTERVAL_MINUTES,
       totalCoinsProcessed: coinsIndex.length,
       screenedCount: screened.length,
-      minQuoteVolumeUSDT: MIN_QUOTE_VOLUME_USDT,
+      minQuoteVolumeUSD: MIN_QUOTE_VOLUME_USD,
+      source: "Kraken",
     })
   );
 

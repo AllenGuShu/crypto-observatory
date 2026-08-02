@@ -60,7 +60,7 @@ export default function CoinDetail({ data }) {
         {isBullish && <span className="badge">多頭排列</span>}
       </div>
       <div className="subtitle">
-        Binance 現貨 · {data.interval} K線
+        Kraken 現貨 · {data.interval} K線
       </div>
 
       <div className="info-grid">
@@ -77,7 +77,7 @@ export default function CoinDetail({ data }) {
       <CoinChart data={data} />
 
       <div className="footer-note">
-        免責聲明：本站資料僅供技術分析與教育研究參考，資料來源為 Binance
+        免責聲明：本站資料僅供技術分析與教育研究參考，資料來源為 Kraken
         公開行情API，可能有延遲，不構成任何投資建議，加密貨幣波動風險極高，投資請自行判斷風險。
       </div>
     </div>

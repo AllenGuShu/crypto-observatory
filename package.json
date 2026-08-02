@@ -2,7 +2,7 @@
   "name": "crypto-observatory",
   "version": "1.0.0",
   "private": true,
-  "description": "加密貨幣多頭排列均線策略觀測站 - 定期自動掃描Binance USDT交易對，提供K線/SMA/KD/MACD圖表",
+  "description": "加密貨幣多頭排列均線策略觀測站 - 定期自動掃描Kraken USD交易對，提供K線/SMA/KD/MACD圖表",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

@@ -12,12 +12,12 @@ const COINS_DIR = path.join(DATA_DIR, "coins");
 fs.mkdirSync(COINS_DIR, { recursive: true });
 
 const SAMPLE_COINS = [
-  { symbol: "BTCUSDT", baseAsset: "BTC", base: 65000, trendUp: true },
-  { symbol: "ETHUSDT", baseAsset: "ETH", base: 3200, trendUp: true },
-  { symbol: "SOLUSDT", baseAsset: "SOL", base: 145, trendUp: true },
-  { symbol: "XRPUSDT", baseAsset: "XRP", base: 0.55, trendUp: false },
-  { symbol: "DOGEUSDT", baseAsset: "DOGE", base: 0.12, trendUp: false },
-  { symbol: "PEPEUSDT", baseAsset: "PEPE", base: 0.0000098, trendUp: true },
+  { symbol: "BTCUSD", baseAsset: "BTC", base: 65000, trendUp: true },
+  { symbol: "ETHUSD", baseAsset: "ETH", base: 3200, trendUp: true },
+  { symbol: "SOLUSD", baseAsset: "SOL", base: 145, trendUp: true },
+  { symbol: "XRPUSD", baseAsset: "XRP", base: 0.55, trendUp: false },
+  { symbol: "DOGEUSD", baseAsset: "DOGE", base: 0.12, trendUp: false },
+  { symbol: "PEPEUSD", baseAsset: "PEPE", base: 0.0000098, trendUp: true },
 ];
 
 function genDates(n) {
@@ -63,7 +63,7 @@ for (const c of SAMPLE_COINS) {
   const record = {
     symbol: c.symbol,
     baseAsset: c.baseAsset,
-    quoteAsset: "USDT",
+    quoteAsset: "USD",
     interval: "1d",
     dates,
     open: opens,

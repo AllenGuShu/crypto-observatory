@@ -80,7 +80,7 @@ export default function Home({ screened, coinsIndex, meta }) {
 
       <input
         className="search-box"
-        placeholder="搜尋幣種代號... 例如 BTC 或 BTCUSDT"
+        placeholder="搜尋幣種代號... 例如 BTC 或 BTCUSD"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
@@ -99,7 +99,7 @@ export default function Home({ screened, coinsIndex, meta }) {
           <tr>
             <th>幣種</th>
             <th>交易對</th>
-            <th>價格 (USDT)</th>
+            <th>價格 (USD)</th>
             <th>24h漲跌</th>
             <th>24h成交額</th>
             <th>K</th>
@@ -120,7 +120,7 @@ export default function Home({ screened, coinsIndex, meta }) {
       )}
 
       <div className="footer-note">
-        免責聲明：本站資料僅供技術分析與教育研究參考，資料來源為 Binance
+        免責聲明：本站資料僅供技術分析與教育研究參考，資料來源為 Kraken
         公開行情API，可能有延遲，不構成任何投資建議，加密貨幣波動風險極高，投資請自行判斷風險。
       </div>
     </div>
