@@ -1,0 +1,19 @@
+{
+  "name": "crypto-observatory",
+  "version": "1.0.0",
+  "private": true,
+  "description": "加密貨幣多頭排列均線策略觀測站 - 定期自動掃描Binance USDT交易對，提供K線/SMA/KD/MACD圖表",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "update-data": "node scripts/updateData.js"
+  },
+  "dependencies": {
+    "lightweight-charts": "^4.1.3",
+    "next": "^14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}
